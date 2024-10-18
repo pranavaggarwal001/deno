@@ -13,30 +13,35 @@ app.get("/api/billingAndPayments", async (c) => {
   }
 
   try {
-    let response;
-    let data;
-
     // GetRentalDue
     if (!userId && !invoiceId) {
-      response = await fetch(baseurl + "/api/Dashboards/dashboardData", {
+      const response = await fetch(baseurl + "/api/Dashboards/dashboardData", {
         headers: {
           accept: "application/json, text/plain, */*",
           authorization: token,
         },
       });
-      data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch rental due data: ${response.statusText}`);
+      }
+
+      const data = await response.json();
       return c.json({
-        pendingDuesText: data.pendingDuesText,
-        totalPendingRentalDueAmount: data.totalPendingRentalDueAmount,
-        totalPayableAmount: data.totalPayableAmount,
-        pendingLateFeeAmount: data.pendingLateFeeAmount,
-        rentoMoney: data.rentoMoney,
+        type: "RentalDue",
+        data: {
+          pendingDuesText: data.pendingDuesText,
+          totalPendingRentalDueAmount: data.totalPendingRentalDueAmount,
+          totalPayableAmount: data.totalPayableAmount,
+          pendingLateFeeAmount: data.pendingLateFeeAmount,
+          rentoMoney: data.rentoMoney,
+        },
       });
     }
 
     // GetPendingDues
     if (userId && !invoiceId) {
-      response = await fetch(
+      const response = await fetch(
         baseurl + `/api/RMUsers/getPendingRentalItemsBreakUp?userId=${userId}`,
         {
           headers: {
@@ -45,18 +50,31 @@ app.get("/api/billingAndPayments", async (c) => {
           },
         }
       );
-      data = await response.json();
-      return c.json({ results: data });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch pending dues: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return c.json({
+        type: "PendingDues",
+        data: data,
+      });
     }
 
     // GetInvoices
     if (!userId && !invoiceId) {
-      response = await fetch(baseurl + `/api/Dashboards/getLedgersData`, {
+      const response = await fetch(baseurl + `/api/Dashboards/getLedgersData`, {
         headers: {
           authorization: token,
         },
       });
-      data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch invoices: ${response.statusText}`);
+      }
+
+      const data = await response.json();
       const formattedData = data.invoices.map((invoice) => ({
         id: invoice.id,
         createdAt: invoice.createdAt,
@@ -66,12 +84,16 @@ app.get("/api/billingAndPayments", async (c) => {
         paymentStatus: invoice.paymentStatus === 20 ? "Paid" : "Unpaid",
         invoicePaidDate: invoice.invoicePaidDate,
       }));
-      return c.json({ invoices: formattedData });
+
+      return c.json({
+        type: "Invoices",
+        data: { invoices: formattedData },
+      });
     }
 
     // GetUserInvoice
     if (userId && invoiceId) {
-      response = await fetch(
+      const response = await fetch(
         baseurl +
           `/api/RMUsers/${userId}/getUserLedgerInvoice?invoiceId=${invoiceId}&discardGstInvoiceDateCheck=true`,
         {
@@ -80,7 +102,12 @@ app.get("/api/billingAndPayments", async (c) => {
           },
         }
       );
-      data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user invoice: ${response.statusText}`);
+      }
+
+      const data = await response.json();
       const formattedData = {
         id: data.id,
         invoiceDate: data.invoiceDate,
@@ -100,7 +127,11 @@ app.get("/api/billingAndPayments", async (c) => {
           orderUniqueId: orderItemRent.orderItem.order.uniqueId,
         })),
       };
-      return c.json(formattedData);
+
+      return c.json({
+        type: "UserInvoice",
+        data: formattedData,
+      });
     }
 
     return c.json({ error: "Invalid combination of parameters" }, 400);
